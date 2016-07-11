@@ -1,0 +1,172 @@
+Semestrální práce z předmětu YD36PJC
+C++dash
+Autor: Ondřej Baláž (balazond@fel.cvut.cz)
+---
+
+O APLIKACI
+==========
+Semestrální práce je implementací části herního principu staré počítačové hry
+Boulder Dash. Hráč se pohybuje po mapě složené z políček různého druhu
+ohraničených zdí. Mapu tvoří prázdná pole, diamanty a kameny. Cílem hry je
+posbírat všechny diamanty a najít východ. Hráč nesmí být zavalen kamenem nebo
+diamantem z výšky ob-jedno a více políček. Gravitace funguje shora dolů. Kameny
+narozdíl od původní verze (pro jednoduchost) padají rovnou, čili není čas na
+"uhybné manévry". Stejně tak není implementováno padání kamenů z kupky na
+stranu.
+
+Kód programu je psán a komentován v angličtině a dostupný pod licencí BSD pro
+snažší inspiraci a rozšiřování.
+
+POUŽITÉ TECHNOLOGIE
+===================
+Program je napsán v jazyce C++. Veškerý kód je původní stejně jako data s
+výjimkou knihovny pro interakci a uživatelské rozhraní libSDL (ke které
+program dynamicky linkuje).
+
+K přeložení programu se používá sestavovací software firmy KitWare CMake
+používaný zejména unixovými projekty jako KDE, openTissue atd. Pomocí něj a
+překladače GCC by mělo být bezproblémové program přeložit i na platformě MS
+Windows nebo Solaris.
+
+Program byl celý napsán v editoru ViM, překládán v překladači gcc a icc a lazen
+pomocí debuggerů gdb a valgrind. Grafická data (soubory sdl_ui.xpm a
+sdl_ui.xcf) byly vytvořeny pomocí programu The Gimp.
+
+PŘEKLAD
+=======
+Po rozbalení archivu stačí vytvořit adresář build ve kterém je třeba spustit
+program cmake nebo ccmake a nasměrovat jej na CMakeLists.txt v adresáři se
+zdrojovými kódy. Po úspěšné konfiguraci (podporuje jednu proměnnou s názvem
+-DDEBUG, která rozhoduje o začlenění ladícího kódu) stačí spustit příkaz make.
+
+Pro ulehčení jsou přiloženy přeložené verze pro platformy linux-i386,
+linux-x86_64 a win32.
+
+SPUŠTĚNÍ
+========
+Program se spouští (v adresáři s binárním souborem):
+./cppdash /cesta/k/map.txt
+čili konkrétně pro testovací dodaný soubor z adresáře build pak:
+./cppdash ../map.txt
+
+ŽIVOTNÍ CYKLUS
+==============
+Program se drží unixové teorie. Pro spuštění se předává právě jeden parametr a
+to je cesta k souboru s mapou která má být přehrána.
+
+Samotný životní cyklus programu:
+
+1. inicializace
+2. načtení mapy
+3. herní smyčka
+4. vyhodnocení
+5. finalizace
+
+Herní smyčka je pak představována sledem akcí:
+
+1. zpracování vstupu (ui->input(), map->movePlayer())
+2. aplikace gravitace (map->doGravity())
+3. překreslení mapy (ui->draw())
+4. kontrola stavu mapy (map->getState())
+
+Podle výsledku (ukončeno/úspěch/neúspěch) program pouze skončí hláškou (do
+připojeného terminálového okna ze kterého je spuštěn, nebo v případě MS Windows
+verze do souboru stdout.txt).
+
+ARCHITEKTURA
+============
+Program je navržen rozumně objektově. To znamená, že jsem se nesnažil za každou
+cenu vytvářet na všechno novou třídu, pokud by měla mít getter+setter a jednu
+plodnou metodu. V podstatě lze říci že program má tři nosné třídy. Dvě se
+týkají přímo logiky samotné hry a jedna je servisní. Podrobnější komentáře jsou
+v doxygen kompatibilním formátu v anglickém jazyce uvedeny přímo v kódu. Zde
+architekturu nastíním jen okrajově.
+
+Herní třídy jsou:
+*Tile* - představuje jedno políčko herní mapy. Resp. objekt na něm umístěný.
+	Typy jednotlivých objektů jsou přímo dány výčtem TILETYPE a cokoliv je v
+	mapě vykresleno musí být jeden z těchto typů. Políčko má dále tři klíčové
+	vlastnosti s příslušnými gettery a settery:
+		* steppable - signalizuje, zda-li je na políčko možné vstoupit či ne
+		* locked    - signalizuje u políček typu východ zdali je východ zamčený,
+		              nebo odemčený. Defakto je to rozlišovací znamení pro
+		              vykreslování textury. Setter zde přímo ovládá vlastnost
+		              steppable.
+		* falling   - u objektů (kámen, diamant), které mohou padat označuje,
+		              jestli je příslušný objekt v aktuálním tiku "padající".
+	Jistě by bylo možné zde vytvořit abstraktní třídu *Tile* a od ní dědit
+	konkrétní typy objektů, ale dle mého názoru je to v tomto případě "kanón
+	na vrabce".
+
+*Map*  - představuje herní celou herní mapu s řadou metod včetně veškeré herní
+	logiky hry. Uvažoval jsem o rozdělení logiky a mapy do dvou separátních
+	tříd, ale dle mého názoru je mapa s logikou natolik provázána, že by se to
+	akorát zle vymstilo při pozdějších zásazích, protože nová pravidla budou
+	měnit potřebné rozhraní jak pro pohyb postavičky hráče, tak pro aplikaci
+	pravidel gravitace.
+
+	Mapa obsahuje metody pro správu a režii mapy:
+		* load()    - sloužící k natažení mapy z textového souboru v lidsky
+		              čitelném formátu do pole 'tiles'.
+		* free()    - uvolnění struktur mapy před ukončením aplikace.
+		* getTileXY() - pro získání ukazatele na políčko na pozici x,y.
+		* setTileXY() - pro přesunutí políčka z původních na nové souřadníce.
+		* findTileType() - pseudoiterátor přes mapu podle typu políčka.
+	a několik setterů a getterů interních vlastností mapy (šířka, výška, stav
+	rozehranosti mapy).
+
+	A dále pak dvě metody implementující herní logiku:
+		* movePlayer() - je metoda která implementuje pohyb postavičky hráče.
+		* doGravity() - je metoda která implementuje pravidla gravitace v mapě.
+	tyto metody jsou volány postupně v herní smyčce.
+
+Servisní třídy:
+*UI*   - poslední třída implementuje uživatelské rozhraní a vykreslení modelu
+	tvořeného třídami Map a Tile. Třída UI je abstraktní a umožňuje tak provést
+	implementaci různých rozhraní hry (řekněme platformně závislých apod.) nad
+	stejným modelem. V podstatě se skládá z inicializace, finalizace,
+	zpracování vstupu a překreslení herní mapy.
+
+	Konkrétní implementací této třídy je UISDL která implementuje
+	multiplatformní uživatelské rozhraní přenosné mezi Unixy a MS Windows
+	závislé na knihovně libSDL.
+
+FORMÁT MAPY
+===========
+Jako formát mapy jsem zvolil textový soubor kde je mapa nakreslena pomocí
+několika znaků. Společně s funkcí Map::load() je formát poměrně
+samodokumentující.
+
+Použité znaky:
+	#   ohraničující zeď
+	@   kámen
+	$   diamant
+	.   písek
+	~   výchozí pozice hráče
+	;   pozice východu z mapy
+
+POZNÁMKY, NEDODĚLKY A MÍSTA PRO ZLEPŠENÍ
+========================================
+Protože se jedná o semestrální projekt, který neměl rozsahem nijak nabobtnat,
+ale měl ukázat jednak schopnost programovat v jazyce C/C++ v rozsahu přednášek
+z předmětu YD36PJC, snažil jsem se vyprodukovat hlavně funkční celek. Ten v
+rámci vymezených specifikací funguje dobře. Zde jednak sebekriticky a druhak
+pro odkaz do budoucna uvádím seznam nedodělků:
+
+- nízká interaktivita s uživatelem (není informován o stavu dění, počtu
+  zbývajících diamantů, může se jen pohybovat nebo hru ukončit. Také informace
+  o stavu ukončení je v současné době vepisována do terminálu.
+
+- skrolování mapy, větší mapy přetečou pevně nastavené okno (řešit v rámci UI
+  třídy a Map třídy - ta musí umět poskytnout výřez).
+
+- v herní logice není implementováno původní padání kamenů/diamantů z hald na
+  strany (pokud je šikmo dolů vedle objektu místo a neleží na podkladové zdi
+  nebo písku měl by na toto místo spadnout, případně padat dále)
+
+- v herní logice není implementováno zpomalení gravitace. V původní verzi má
+  hráč možnost "předběhnout" pravidla. Toto by se řešilo počítáním reálného
+  času v rámci herní smyčky a prováděním volání Map::doGravity() při vypršení a
+  nulování časovače.
+
+- chybí některé další původní elementy jako pohybující se nepřátelé atd.
