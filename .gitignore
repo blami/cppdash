@@ -1,0 +1,5 @@
+_build/
+*.o
+cppdash
+cppdash.exe
+config.h

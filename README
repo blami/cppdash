@@ -1,0 +1,16 @@
+INSTALLATION
+============
+
+This is really not meant to be installed. You can build it and run it. Make
+sure you have installed following packages:
+
+CMake
+libSDL-devel
+
+Untar archive to folder called cppdash. Then:
+$ cd cppdash
+$ mkdir build
+$ cd build
+$ cmake ..
+$ make
+$ cppdash ../map.txt
